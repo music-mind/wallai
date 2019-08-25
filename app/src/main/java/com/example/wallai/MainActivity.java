@@ -1,5 +1,6 @@
 package com.example.wallai;
 
+import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.os.Environment;
@@ -11,6 +12,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
+import android.widget.Toast;
 
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.OnFailureListener;
@@ -28,6 +30,9 @@ import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.ByteArrayEntity;
 import org.apache.http.impl.client.DefaultHttpClient;
 import org.apache.http.util.EntityUtils;
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -57,6 +62,7 @@ import com.google.firebase.firestore.QuerySnapshot;
 public class MainActivity extends AppCompatActivity {
 
     String currentPhotoPath;
+    private static final int SPEECH_REQUEST_CODE = 0;
     static final int REQUEST_TAKE_PHOTO = 1;
     static final int REQUEST_IMAGE_CAPTURE = 1;
     String azureComputerVisionApiKey;
@@ -68,12 +74,14 @@ public class MainActivity extends AppCompatActivity {
     public static HttpPost httpPost = new HttpPost(baseUrl);
     public static ArrayList<NameValuePair> myParams = new ArrayList<>(1);
     private FirebaseFirestore db = null;
+    Context context;
 
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        this.context = getApplicationContext();
         StrictMode.ThreadPolicy policy = new
                 StrictMode.ThreadPolicy.Builder().permitAll().build();
         StrictMode.setThreadPolicy(policy);
@@ -274,7 +282,46 @@ public class MainActivity extends AppCompatActivity {
             httpPost.setEntity(new ByteArrayEntity(imageByteArray));
             HttpResponse response =  client.execute(httpPost);
 
-            System.out.println(EntityUtils.toString(response.getEntity()));
+            //System.out.println(EntityUtils.toString(response.getEntity()));
+            String res = EntityUtils.toString(response.getEntity());
+            Log.i("Data", res);
+            try {
+                JSONObject json = new JSONObject(res);
+                String brand = "";
+                String product = "";
+                String caption = "";
+                Number price = 0;
+                JSONObject description = json.getJSONObject("description");
+                JSONArray tags = description.getJSONArray("tags");
+                if(tags.length() > 1) {
+                    product = tags.get(0).toString() + tags.get(1).toString();
+                } else {
+                    product = tags.get(0).toString();
+                }
+                Log.i("Product", product);
+                JSONArray captions = description.getJSONArray("captions");
+                if(captions.length() > 0) {
+                    JSONObject captionObj = captions.getJSONObject(0);
+                    caption = captionObj.getString("text");
+                }
+                JSONArray brands = json.getJSONArray("brands");
+                if(brands.length() > 0) {
+                    JSONObject brandObj = brands.getJSONObject(0);
+                    brand = brandObj.getString("name");
+                }
+                Log.i("Caption", caption);
+                Log.i("Brand", brand);
+                System.out.println(brand);
+                System.out.println(product);
+                System.out.println(caption);
+                Toast toast = Toast.makeText(context, brand + ": " + caption, Toast.LENGTH_LONG);
+                toast.show();
+                // Get Estimated Price
+                //
+                //
+            }catch (JSONException err){
+                Log.d("Error", err.toString());
+            }
         }catch(Exception e){
             System.out.println("ERRRRR"  + e.toString());
         }
