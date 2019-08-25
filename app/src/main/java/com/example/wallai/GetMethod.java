@@ -1,4 +1,4 @@
-package com.example.camerasample;
+package com.example.wallai;
 
 import android.graphics.Bitmap;
 import android.os.AsyncTask;
@@ -6,7 +6,6 @@ import android.util.Log;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedReader;
-import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;

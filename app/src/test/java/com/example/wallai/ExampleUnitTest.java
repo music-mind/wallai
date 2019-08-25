@@ -1,4 +1,4 @@
-package com.example.camerasample;
+package com.example.wallai;
 
 import org.junit.Test;
 
