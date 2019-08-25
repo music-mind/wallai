@@ -10,8 +10,10 @@ import android.provider.MediaStore;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import android.os.Bundle;
+import android.speech.RecognizerIntent;
 import android.util.Log;
 import android.view.View;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import com.google.android.gms.tasks.OnCompleteListener;
@@ -75,12 +77,18 @@ public class MainActivity extends AppCompatActivity {
     public static ArrayList<NameValuePair> myParams = new ArrayList<>(1);
     private FirebaseFirestore db = null;
     Context context;
+    public static List<Integer> myPrices = null;
+    String curBrand;
+    Double curPrice;
+    String collectionPath;
+    Map<String, String> curItem;
 
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        getSupportActionBar().hide();
         this.context = getApplicationContext();
         StrictMode.ThreadPolicy policy = new
                 StrictMode.ThreadPolicy.Builder().permitAll().build();
@@ -92,37 +100,21 @@ public class MainActivity extends AppCompatActivity {
 //        compVisClient = ComputerVisionManager.authenticate(azureComputerVisionApiKey).withEndpoint(endpointUrl);
         //  END - Create an authenticated Computer Vision client.
 
+        myPrices = new ArrayList<>();
+
         // Firebase
         FirebaseApp.initializeApp(this);
         db = FirebaseFirestore.getInstance();
-        Map<String, String> thing3 = new HashMap<>();
-        thing3.put("NAME", "foundation");
-        thing3.put("BRAND", "Clinique");
-        addEntry("cosmetics", thing3).addOnSuccessListener(new OnSuccessListener<DocumentReference>() {
-            @Override
-            public void onSuccess(DocumentReference documentReference) {
-                Log.d("DB_ADD", "DocumentSnapshot added with ID: " + documentReference.getId());
-            }
-        });
-        Set<String[]> filter1 = new HashSet<>();
-        filter1.add(new String[]{"NAME", "lipstick"});
 
-        filterEntries("cosmetics", filter1).addOnCompleteListener(new OnCompleteListener<QuerySnapshot>() {
-            @Override
-            public void onComplete(@NonNull Task<QuerySnapshot> task) {
-                if (task.isSuccessful()) {
-                    Boolean gotResult = false;
-                    for (QueryDocumentSnapshot document : task.getResult()) {
-                        gotResult = true;
-                        Log.d("DB_QUERY", document.getId() + " => " + document.getData());
-                    }
-
-                    if (!gotResult) Log.d("DB_QUERY_TO_ADD", "go to add screen here");
-                } else {
-                    Log.d("DB_QUERY", "Error getting documents: ", task.getException());
-                }
-            }
-        });
+//        Map<String, String> thing3 = new HashMap<>();
+//        thing3.put("NAME", "foundation");
+//        thing3.put("BRAND", "Clinique");
+//        addEntry("cosmetics", thing3).addOnSuccessListener(new OnSuccessListener<DocumentReference>() {
+//            @Override
+//            public void onSuccess(DocumentReference documentReference) {
+//                Log.d("DB_ADD", "DocumentSnapshot added with ID: " + documentReference.getId());
+//            }
+//        });
     }
 
     // add database entry to a collection
@@ -141,51 +133,26 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
-    // get filtered database entries from collection
-    // at the moment only uses whereEqualTo query, since I think that's all we're gonna need right?
-    // structure of filter: index [0] is field name, index [1] is filter value
-    private Task<QuerySnapshot> filterEntries(String collectionPath, Set<String[]> filters) {
-        Query query = db.collection(collectionPath);
-
-        for (String[] filter : filters) {
-            query = query.whereEqualTo(filter[0], filter[1]);
-        }
-
-        return query.get();
-    }
-
-    // get database entry from collection by ID
-    private void getEntryByID(String collectionPath, String name) {
-        DocumentReference docRef = db.collection(collectionPath).document(name);
-        docRef.get().addOnCompleteListener(new OnCompleteListener<DocumentSnapshot>() {
-            @Override
-            public void onComplete(@NonNull Task<DocumentSnapshot> task) {
-                if (task.isSuccessful()) {
-                    DocumentSnapshot document = task.getResult();
-                    if (document.exists()) {
-                        Log.d("DB_GET_BY_ID", "DocumentSnapshot data: " + document.getData());
-                    } else {
-                        Log.d("DB_GET_BY_ID", "No such document");
-                    }
-                } else {
-                    Log.d("DB_GET_BY_ID", "get failed with ", task.getException());
-                }
-            }
-        });
-    }
 
     // get all database entries from a collection
-    private void getAllEntries(String collectionPath) {
+    private void getAllEntries(final String collectionPath, final Map<String, String> item) {
         db.collection(collectionPath)
                 .get()
                 .addOnCompleteListener(new OnCompleteListener<QuerySnapshot>() {
                     @Override
                     public void onComplete(@NonNull Task<QuerySnapshot> task) {
-                        if (task.isSuccessful()) {
+                        if((task.isSuccessful())) {
+                            Boolean resultNotEmpty = false;
                             for (QueryDocumentSnapshot document : task.getResult()) {
+                                resultNotEmpty = true;
                                 Log.d("DB_GET", document.getId() + " => " + document.getData());
                             }
-
+//                            if (!resultNotEmpty) { // if no items were found, i.e. task.getResult() was empty
+//                                Log.d("DB_GET", "result was empty, add thing now");
+//                                addEntry(collectionPath, item);
+//                            } else { // if items were found
+                                findPrice(collectionPath, item, task);
+//                            }
                         } else {
                             Log.w("DB_GET", "Error getting documents.", task.getException());
                             return;
@@ -194,8 +161,8 @@ public class MainActivity extends AppCompatActivity {
                 });
     }
 
-    private int findPrice(Map<String, String> item, Task<QuerySnapshot> task) {
-        List<Integer> bestMatchPrices = new ArrayList<>();
+    private void findPrice(String collectionPath, Map<String, String> item, Task<QuerySnapshot> task) {
+        List<Double> bestMatchPrices = new ArrayList<>();
         int bestMatchCount = 1;
         int tempCount;
         for (QueryDocumentSnapshot document : task.getResult()) {
@@ -206,19 +173,30 @@ public class MainActivity extends AppCompatActivity {
             }
             if (tempCount > bestMatchCount) {
                 bestMatchCount = tempCount;
-                bestMatchPrices = Arrays.asList((Integer) document.get("price"));
+                bestMatchPrices = Arrays.asList((Double) document.get("price"));
             } else if (tempCount == bestMatchCount) {
-                bestMatchPrices.add((Integer) document.get("price"));
+                bestMatchPrices.add((Double) document.get("price"));
             }
         }
         // get average
         int length = 0;
-        int priceSum = 0;
-        for (int price : bestMatchPrices) {
+        double priceSum = 0;
+        for (double price : bestMatchPrices) {
             ++length;
             priceSum += price;
         }
-        return priceSum / length;
+
+        if (length == 0) {
+            Log.d("DB_GET", "result was empty, add thing now");
+            //addEntry(collectionPath, item);
+
+            displaySpeechRecognizer();
+        } else {
+            curPrice = priceSum/length;
+            TextView tv2 = (TextView)findViewById(R.id.textView2);
+            tv2.setText("$ " + Double.toString(curPrice));
+        }
+
     }
 
 
@@ -265,10 +243,38 @@ public class MainActivity extends AppCompatActivity {
 //
 //            } catch (Exception ex) {}
             //imageView.setImageBitmap(imageBitmap);
+        } else if ((requestCode == SPEECH_REQUEST_CODE && resultCode == RESULT_OK)) {
+            List<String> results = data.getStringArrayListExtra(
+                    RecognizerIntent.EXTRA_RESULTS);
+            String spokenText = results.get(0);
+            Double num;
+            try {
+                num = Double.parseDouble(spokenText);
+            } catch (NumberFormatException e) {
+                num = 2.99;
+            }
+            // Do something with spokenText
+            curPrice = num;
+            TextView tv2 = (TextView)findViewById(R.id.textView2);
+            tv2.setText("$ " + Double.toString(curPrice));
+            Toast toast = Toast.makeText(context, "Price: $ " + num.toString(), Toast.LENGTH_LONG);
+            toast.show();
+            curItem.put("PRICE", curPrice.toString());
+            addEntry(collectionPath, curItem);
         }
     }
 
-    public void getImage(){
+    // Create an intent that can start the Speech Recognizer activity
+    private void displaySpeechRecognizer() {
+        Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+// Start the activity, the intent will be populated with the speech text
+        startActivityForResult(intent, SPEECH_REQUEST_CODE);
+    }
+
+
+        public void getImage(){
         httpPost.setHeader("Ocp-Apim-Subscription-Key", azureComputerVisionApiKey);
         httpPost.setHeader("Content-Type", "application/octet-stream");
 
@@ -290,11 +296,11 @@ public class MainActivity extends AppCompatActivity {
                 String brand = "";
                 String product = "";
                 String caption = "";
-                Number price = 0;
+                Double price = 0.00;
                 JSONObject description = json.getJSONObject("description");
                 JSONArray tags = description.getJSONArray("tags");
                 if(tags.length() > 1) {
-                    product = tags.get(0).toString() + tags.get(1).toString();
+                    product = tags.get(0).toString() + " " + tags.get(1).toString();
                 } else {
                     product = tags.get(0).toString();
                 }
@@ -308,14 +314,28 @@ public class MainActivity extends AppCompatActivity {
                 if(brands.length() > 0) {
                     JSONObject brandObj = brands.getJSONObject(0);
                     brand = brandObj.getString("name");
+                    curBrand = brand;
+                } else {
+                    brand = "MYSTERY";
+                    curBrand = brand;
                 }
+                curPrice = price;
                 Log.i("Caption", caption);
                 Log.i("Brand", brand);
-                System.out.println(brand);
-                System.out.println(product);
-                System.out.println(caption);
+                // set item
+                TextView tv = (TextView)findViewById(R.id.textView);
+                tv.setText(brand.toUpperCase());
+
+                Map<String, String> newEntry = new HashMap<String, String>();
+                newEntry.put(product, brand);
+                Log.d("DEBUG_FIND", "product map: " + product);
+                this.collectionPath = "drinks";
+                this.curItem = newEntry;
+                getAllEntries("drinks", newEntry );
+
                 Toast toast = Toast.makeText(context, brand + ": " + caption, Toast.LENGTH_LONG);
                 toast.show();
+//                displaySpeechRecognizer();
                 // Get Estimated Price
                 //
                 //
