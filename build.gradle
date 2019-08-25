@@ -15,11 +15,20 @@ buildscript {
 }
 
 allprojects {
+    afterEvaluate { project ->
+        def COMPUTER_VISION_SUBSCRIPTION_KEY = System.getenv("COMPUTER_VISION_SUBSCRIPTION_KEY")
+        if (COMPUTER_VISION_SUBSCRIPTION_KEY == null) {
+            Properties properties = new Properties()
+            properties.load(project.rootProject.file('gradle.properties').newDataInputStream())
+            COMPUTER_VISION_SUBSCRIPTION_KEY = properties.getProperty('COMPUTER_VISION_SUBSCRIPTION_KEY')?:"NoKeyFound"
+        }
+    }
     repositories {
         google()
         jcenter()
         
     }
+
 }
 
 task clean(type: Delete) {
