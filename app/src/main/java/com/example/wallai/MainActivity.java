@@ -173,9 +173,9 @@ public class MainActivity extends AppCompatActivity {
             }
             if (tempCount > bestMatchCount) {
                 bestMatchCount = tempCount;
-                bestMatchPrices = Arrays.asList((Double) document.get("price"));
+                bestMatchPrices = Arrays.asList(Double.parseDouble(document.get("PRICE").toString()));
             } else if (tempCount == bestMatchCount) {
-                bestMatchPrices.add((Double) document.get("price"));
+                bestMatchPrices.add(Double.parseDouble(document.get("PRICE").toString()));
             }
         }
         // get average
